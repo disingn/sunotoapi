@@ -19,10 +19,10 @@ var (
 )
 
 func GetSession() string {
-	url := "https://clerk.suno.ai/v1/client?_clerk_js_version=4.70.5"
+	_url := "https://clerk.suno.ai/v1/client?_clerk_js_version=4.70.5"
 	method := "GET"
 	client := &http.Client{}
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, _url, nil)
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
 	res, err := client.Do(req)
@@ -45,19 +45,19 @@ func GetSession() string {
 	return data.Response.Sessions[0].Id
 }
 
-func GetJwtToken() string {
+func GetJwtToken() (string, error) {
 	if time.Now().After(time.Unix(SessionExp, 0)) {
 		Session = GetSession()
 	}
-	url := fmt.Sprintf("https://clerk.suno.ai/v1/client/sessions/%s/tokens?_clerk_js_version=4.70.5", Session)
+	_url := fmt.Sprintf("https://clerk.suno.ai/v1/client/sessions/%s/tokens?_clerk_js_version=4.70.5", Session)
 	method := "POST"
 
 	client := &http.Client{}
-	req, err := http.NewRequest(method, url, nil)
+	req, err := http.NewRequest(method, _url, nil)
 
 	if err != nil {
 		log.Print(err)
-		return ""
+		return "", err
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
@@ -65,66 +65,62 @@ func GetJwtToken() string {
 	res, err := client.Do(req)
 	if err != nil {
 		log.Print(err)
-		return ""
+		return "", err
 	}
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 200 {
-		log.Print("err body: ", string(body))
-		return ""
+		return "", fmt.Errorf(string(body))
 	}
 	var data models.GetTokenData
 	if err = json.Unmarshal(body, &data); err != nil {
 		log.Print(err)
-		return ""
+		return "", err
 	}
 	//有效时间 1 分钟
 	if len(data.Jwt) == 0 {
 		log.Print("GetJwtToken: ", data.Jwt)
-		return ""
+		return "", err
 	}
-	return data.Jwt
+	return data.Jwt, nil
 }
 
-func V2Generate(d models.GenerateCreateData) *models.GenerateData {
-	jwt := IsJWTExpired(Jwt)
-	url := "https://studio-api.suno.ai/api/generate/v2/"
+func V2Generate(d models.GenerateCreateData) ([]byte, error) {
+	jwt, err := IsJWTExpired()
+	if err != nil {
+		return nil, err
+	}
+	_url := "https://studio-api.suno.ai/api/generate/v2/"
 	method := "POST"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
 		log.Fatalf("Error marshalling request data: %v", err)
-		return nil
+		return nil, err
 	}
 	client := &http.Client{}
-	req, err := http.NewRequest(method, url, bytes.NewReader(jsonData))
+	req, err := http.NewRequest(method, _url, bytes.NewReader(jsonData))
 	if err != nil {
 		log.Print(err)
-		return nil
+		return nil, err
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	req.Header.Add("Authorization", "Bearer "+jwt)
 	res, err := client.Do(req)
 	if err != nil {
 		log.Print(err)
-		return nil
+		return nil, err
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode != 200 {
-		log.Print("create err body: ", string(body))
-		return nil
-	}
-	var data models.GenerateData
-	if err = json.Unmarshal(body, &data); err != nil {
-		log.Print(err)
-		return nil
-	}
-	return &data
+	return body, nil
 }
 
-func V2GetFeedJop(ids string) []byte {
-	jwt := IsJWTExpired(Jwt)
+func V2GetFeedJop(ids string) ([]byte, error) {
+	jwt, err := IsJWTExpired()
+	if err != nil {
+		return nil, err
+	}
 	ids = url.QueryEscape(ids)
 	_url := "https://studio-api.suno.ai/api/feed/?ids=" + ids
 	method := "GET"
@@ -132,20 +128,16 @@ func V2GetFeedJop(ids string) []byte {
 	req, err := http.NewRequest(method, _url, nil)
 	if err != nil {
 		log.Print(err)
-		return nil
+		return nil, err
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	req.Header.Add("Authorization", "Bearer "+jwt)
 	res, err := client.Do(req)
 	if err != nil {
 		log.Print(err)
-		return nil
+		return nil, err
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode != 200 {
-		log.Print("get err body: ", string(body))
-		return nil
-	}
-	return body
+	return body, nil
 }

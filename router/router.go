@@ -15,7 +15,11 @@ func CreateJop() fiber.Handler {
 				"error": "Cannot parse JSON",
 			})
 		}
-		return c.Status(fiber.StatusOK).JSON(serve.V2Generate(data))
+		body, err := serve.V2Generate(data)
+		if err != nil {
+			return c.Status(fiber.StatusOK).SendString(err.Error())
+		}
+		return c.Status(fiber.StatusOK).JSON(body)
 	}
 }
 
@@ -32,7 +36,11 @@ func GetJop() fiber.Handler {
 				"error": "Cannot fond ids",
 			})
 		}
-		return c.Status(fiber.StatusOK).Send(serve.V2GetFeedJop(data["ids"]))
+		body, err := serve.V2GetFeedJop(data["ids"])
+		if err != nil {
+			return c.Status(fiber.StatusOK).SendString(err.Error())
+		}
+		return c.Status(fiber.StatusOK).Send(body)
 	}
 }
 
