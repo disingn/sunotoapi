@@ -71,6 +71,7 @@ func GetJwtToken() (string, error) {
 
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 200 {
+		//log.Print(string(body))
 		return "", fmt.Errorf(string(body))
 	}
 	var data models.GetTokenData
@@ -89,6 +90,7 @@ func GetJwtToken() (string, error) {
 func V2Generate(d models.GenerateCreateData) ([]byte, error) {
 	jwt, err := IsJWTExpired()
 	if err != nil {
+		log.Println("Error getting JWT: ", err)
 		return nil, err
 	}
 	_url := "https://studio-api.suno.ai/api/generate/v2/"
@@ -113,12 +115,14 @@ func V2Generate(d models.GenerateCreateData) ([]byte, error) {
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
+	fmt.Println(string(body))
 	return body, nil
 }
 
 func V2GetFeedJop(ids string) ([]byte, error) {
 	jwt, err := IsJWTExpired()
 	if err != nil {
+		log.Println("Error getting JWT: ", err)
 		return nil, err
 	}
 	ids = url.QueryEscape(ids)

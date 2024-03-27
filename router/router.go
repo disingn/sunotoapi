@@ -19,7 +19,8 @@ func CreateJop() fiber.Handler {
 		if err != nil {
 			return c.Status(fiber.StatusOK).SendString(err.Error())
 		}
-		return c.Status(fiber.StatusOK).JSON(body)
+
+		return c.Status(fiber.StatusOK).Send(body)
 	}
 }
 
