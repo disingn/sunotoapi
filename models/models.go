@@ -188,13 +188,6 @@ type GetSessionData struct {
 	Client interface{} `json:"client"`
 }
 
-type GenerateCreateData struct {
-	GptDescriptionPrompt string `json:"gpt_description_prompt"`
-	Mv                   string `json:"mv"`
-	Prompt               string `json:"prompt"`
-	MakeInstrumental     bool   `json:"make_instrumental"`
-}
-
 type GetFeedData struct {
 	Id                string      `json:"id"`
 	VideoUrl          string      `json:"video_url"`

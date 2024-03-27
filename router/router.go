@@ -1,21 +1,26 @@
 package router
 
 import (
-	"fksunoapi/models"
 	"fksunoapi/serve"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
-func CreateJop() fiber.Handler {
+func CreateTask() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var data models.GenerateCreateData
+		var data map[string]interface{}
 		if err := c.BodyParser(&data); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Cannot parse JSON",
 			})
 		}
-		body, err := serve.V2Generate(data)
+		var body []byte
+		var err error
+		if c.Path() == "/v2/generate" {
+			body, err = serve.V2Generate(data)
+		} else if c.Path() == "/v2/lyrics/create" {
+			body, err = serve.GenerateLyrics(data)
+		}
 		if err != nil {
 			return c.Status(fiber.StatusOK).SendString(err.Error())
 		}
@@ -23,8 +28,7 @@ func CreateJop() fiber.Handler {
 		return c.Status(fiber.StatusOK).Send(body)
 	}
 }
-
-func GetJop() fiber.Handler {
+func GetTask() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var data map[string]string
 		if err := c.BodyParser(&data); err != nil {
@@ -37,7 +41,13 @@ func GetJop() fiber.Handler {
 				"error": "Cannot fond ids",
 			})
 		}
-		body, err := serve.V2GetFeedJop(data["ids"])
+		var body []byte
+		var err error
+		if c.Path() == "/v2/feed" {
+			body, err = serve.V2GetFeedTask(data["ids"])
+		} else if c.Path() == "/v2/lyrics/task" {
+			body, err = serve.GetLyricsTask(data["ids"])
+		}
 		if err != nil {
 			return c.Status(fiber.StatusOK).SendString(err.Error())
 		}
@@ -47,6 +57,8 @@ func GetJop() fiber.Handler {
 
 func SetupRoutes(app *fiber.App) {
 	app.Use(logger.New(logger.ConfigDefault))
-	app.Post("/v2/generate", CreateJop())
-	app.Post("/v2/feed", GetJop())
+	app.Post("/v2/generate", CreateTask())
+	app.Post("/v2/feed", GetTask())
+	app.Post("/v2/lyrics/create", CreateTask())
+	app.Post("/v2/lyrics/task", GetTask())
 }

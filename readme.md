@@ -15,7 +15,7 @@ App:
 ./sunoweb2api
 ```
 #### 3. 使用方式
-创建任务
+创建音乐任务
 ```shell
 curl --location --request POST 'localhost:3560/v2/generate' \
 --header 'Content-Type: application/json' \
@@ -26,7 +26,56 @@ curl --location --request POST 'localhost:3560/v2/generate' \
     "make_instrumental": false
 }'
 ```
-查询任务
+支持如下参数：
+- 默认参数
+    - gpt_description_prompt: 生成音乐的描述
+    - mv: 音乐模型
+    - prompt: 生成音乐的提示
+    - make_instrumental: 是否生成无人声音乐
+```json
+{
+    "gpt_description_prompt": "an atmospheric metal song about dancing all night long",
+    "mv": "chirp-v3-0",
+    "prompt": "",
+    "make_instrumental": false
+}
+```
+- 自定义
+    - prompt: 歌词
+    - tags: 音乐标签
+    - mv: 音乐模型
+    - title: 音乐标题
+    - continue_clip_id: 继续生成音乐的clip_id
+    - continue_at: 继续生成音乐的时间
+    
+```json
+{
+  "prompt": "[Verse]\nEvery morning, when I wake up\nI stumble to the kitchen to get my cup (cup)\nThe smell, the taste, it's like a dream\nI'm addicted to that caffeinated beam\n\n[Chorus]\nI need my java fix, it's my daily high (high)\nGotta have my coffee, don't ask me why (why)\nBrew it strong, brew it black, can't get enough\nThat sweet, dark liquid, it keeps me buzzin' (buzzin')\n\n[Verse 2]\nEspresso, latte, cappuccino too\nI'll take it any way, as long as it's brew\nFrom the fancy cafes to the corner shops\nI'm on a mission to find the perfect crop (yeah)",
+  "tags": "epic blues",
+  "mv": "chirp-v3-0",
+  "title": "Coffee Addiction",
+  "continue_clip_id": null,
+  "continue_at": null
+}
+```
+- 自定义纯音乐
+    - prompt: 歌词
+    - tags: 音乐标签
+    - mv: 音乐模型
+    - title: 音乐标题
+    - continue_clip_id: 继续生成音乐的clip_id
+    - continue_at: 继续生成音乐的时间
+```json
+{
+  "prompt": "",
+  "tags": "epic blues",
+  "mv": "chirp-v3-0",
+  "title": "Coffee Addiction",
+  "continue_clip_id": null,
+  "continue_at": null
+}
+```
+查询音乐任务
 ```shell
 curl --location --request POST 'localhost:3560/v2/feed' \
 --header 'Content-Type: application/json' \
@@ -124,6 +173,34 @@ curl --location --request POST 'localhost:3560/v2/feed' \
   "status": "running",
   "created_at": "2024-03-26T07:01:44.214Z",
   "batch_size": 2
+}
+```
+使用ai生成歌词
+```shell
+curl --location --request POST 'localhost:3560/v2/lyrics/create' \
+--header 'Content-Type: application/json' \
+--data-raw '{"prompt":""}'
+```
+响应json：
+```json
+{
+  "id": "4ad435dd-b3f1-4ed7-b316-1868ff4ffe55"
+}
+```
+查询生成的歌词
+```shell
+curl --location --request POST 'localhost:3560/v2/lyrics/task' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "ids":"4ad435dd-b3f1-4ed7-b316-1868ff4ffe55"
+}'
+```
+响应json：
+```json
+{
+  "text": "[Verse]\nI saw you sippin' on your latte with grace\nAcross the room, I couldn't help but gaze (gazin')\nYour smile was like a sunbeam on a cloudy day\nIn that moment, I knew I had to find a way\n\n[Chorus]\nCoffee shop love affair, brewing in the air\nAin't nothin' like the feeling when we're there (when we're there)\nCoffee shop love affair, hearts are gonna dare\nTo catch a glimpse of something rare\n\n[Verse 2]\nI ordered my Americano, extra light\nAnd slowly made my way closer in sight (closer in sight)\nOur eyes met, and the world began to fade\nIn that coffee shop, our love was made (made, baby)",
+  "title": "The Coffee Shop Love Affair",
+  "status": "complete"
 }
 ```
 #### 4. 注意事项

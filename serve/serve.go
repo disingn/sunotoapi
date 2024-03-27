@@ -87,61 +87,82 @@ func GetJwtToken() (string, error) {
 	return data.Jwt, nil
 }
 
-func V2Generate(d models.GenerateCreateData) ([]byte, error) {
+func sendRequest(url, method string, data []byte) ([]byte, error) {
 	jwt, err := IsJWTExpired()
 	if err != nil {
 		log.Println("Error getting JWT: ", err)
 		return nil, err
 	}
+
+	client := &http.Client{}
+	var req *http.Request
+	if data != nil {
+		req, err = http.NewRequest(method, url, bytes.NewReader(data))
+	} else {
+		req, err = http.NewRequest(method, url, nil)
+	}
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	}
+
+	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
+	req.Header.Add("Authorization", "Bearer "+jwt)
+
+	res, err := client.Do(req)
+	if err != nil {
+		log.Print(err)
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+	return body, nil
+}
+
+func V2Generate(d map[string]interface{}) ([]byte, error) {
 	_url := "https://studio-api.suno.ai/api/generate/v2/"
-	method := "POST"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
 		log.Fatalf("Error marshalling request data: %v", err)
 		return nil, err
 	}
-	client := &http.Client{}
-	req, err := http.NewRequest(method, _url, bytes.NewReader(jsonData))
+	body, err := sendRequest(_url, "POST", jsonData)
 	if err != nil {
-		log.Print(err)
 		return nil, err
 	}
-	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-	req.Header.Add("Authorization", "Bearer "+jwt)
-	res, err := client.Do(req)
-	if err != nil {
-		log.Print(err)
-		return nil, err
-	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(res.Body)
-	fmt.Println(string(body))
 	return body, nil
 }
 
-func V2GetFeedJop(ids string) ([]byte, error) {
-	jwt, err := IsJWTExpired()
-	if err != nil {
-		log.Println("Error getting JWT: ", err)
-		return nil, err
-	}
+func V2GetFeedTask(ids string) ([]byte, error) {
 	ids = url.QueryEscape(ids)
 	_url := "https://studio-api.suno.ai/api/feed/?ids=" + ids
-	method := "GET"
-	client := &http.Client{}
-	req, err := http.NewRequest(method, _url, nil)
+	body, err := sendRequest(_url, "GET", nil)
 	if err != nil {
-		log.Print(err)
 		return nil, err
 	}
-	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-	req.Header.Add("Authorization", "Bearer "+jwt)
-	res, err := client.Do(req)
+	return body, nil
+}
+
+func GenerateLyrics(d map[string]interface{}) ([]byte, error) {
+	_url := "https://studio-api.suno.ai/api/generate/lyrics/"
+	jsonData, err := json.Marshal(d)
 	if err != nil {
-		log.Print(err)
+		log.Fatalf("Error marshalling request data: %v", err)
 		return nil, err
 	}
-	defer res.Body.Close()
-	body, _ := io.ReadAll(res.Body)
+	body, err := sendRequest(_url, "POST", jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func GetLyricsTask(ids string) ([]byte, error) {
+	_url := "https://studio-api.suno.ai/api/generate/lyrics/" + ids
+	body, err := sendRequest(_url, "GET", nil)
+	if err != nil {
+		return nil, err
+	}
 	return body, nil
 }
