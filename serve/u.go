@@ -3,6 +3,7 @@ package serve
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fksunoapi/models"
 	"fmt"
 	"log"
 	"strings"
@@ -14,6 +15,16 @@ type Claims struct {
 }
 
 var Jwt string
+
+func getLastUserContent(data models.OpenaiCompletionsData) string {
+	var lastUserContent string
+	for _, message := range data.Messages {
+		if message.Role == "user" {
+			lastUserContent = message.Content
+		}
+	}
+	return lastUserContent
+}
 
 func IsJWTExpired() (Jwt string, err error) {
 	if Jwt == "" {

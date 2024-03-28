@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fksunoapi/models"
 	"fksunoapi/serve"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -55,10 +56,27 @@ func GetTask() fiber.Handler {
 	}
 }
 
+func SunoChat() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var data models.OpenaiCompletionsData
+		if err := c.BodyParser(&data); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Cannot parse JSON",
+			})
+		}
+		res, err := serve.SunoChat(data)
+		if err != nil {
+			return c.Status(fiber.StatusOK).SendString(err.Error())
+		}
+		return c.Status(fiber.StatusOK).JSON(res)
+	}
+}
+
 func SetupRoutes(app *fiber.App) {
 	app.Use(logger.New(logger.ConfigDefault))
 	app.Post("/v2/generate", CreateTask())
 	app.Post("/v2/feed", GetTask())
 	app.Post("/v2/lyrics/create", CreateTask())
 	app.Post("/v2/lyrics/task", GetTask())
+	app.Post("/v1/chat/completions", SunoChat())
 }

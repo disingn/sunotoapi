@@ -203,6 +203,45 @@ curl --location --request POST 'localhost:3560/v2/lyrics/task' \
   "status": "complete"
 }
 ```
+兼容 openai /v1/chat/completions格式
+```shell
+curl --location --request POST 'localhost:3560/v1/chat/completions' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "model": "chirp-v3-0",
+    "messages": [
+        {
+            "role": "user",
+            "content": "制作歌曲《万能的mj）中文歌词 mj是-个群体的统称"
+        }
+    ]
+}'
+```
+响应json：
+```json
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "xxxx",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1711612671,
+  "id": "chatcmpl-7QyqpwdfhqwajicIEznoc6Q47XAyW",
+  "model": "chirp-v3-0",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 17,
+    "prompt_tokens": 57,
+    "total_tokens": 74
+  }
+}
+```
 #### 4. 注意事项
 - 本项目仅用于学习交流，不得用于商业用途
 - 个人账号部分功能无法使用
