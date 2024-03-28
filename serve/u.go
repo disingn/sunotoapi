@@ -3,7 +3,6 @@ package serve
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fksunoapi/models"
 	"fmt"
 	"log"
 	"strings"
@@ -16,13 +15,30 @@ type Claims struct {
 
 var Jwt string
 
-func getLastUserContent(data models.OpenaiCompletionsData) string {
+func getLastUserContent(data map[string]interface{}) string {
 	var lastUserContent string
-	for _, message := range data.Messages {
-		if message.Role == "user" {
-			lastUserContent = message.Content
+	messages, ok := data["messages"].([]interface{})
+	if !ok {
+		return lastUserContent
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		message, ok := messages[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		role, ok := message["role"].(string)
+		if !ok {
+			continue
+		}
+
+		if role == "user" {
+			lastUserContent, _ = message["content"].(string)
+			break
 		}
 	}
+
 	return lastUserContent
 }
 

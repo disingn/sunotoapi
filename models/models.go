@@ -222,14 +222,6 @@ type GetFeedData struct {
 	IsPublic    bool        `json:"is_public"`
 }
 
-type OpenaiCompletionsData struct {
-	Model    string `json:"model"`
-	Messages []struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
-	} `json:"messages"`
-}
-
 type OpenaiCompletionsRespData struct {
 	Choices []struct {
 		FinishReason string `json:"finish_reason"`

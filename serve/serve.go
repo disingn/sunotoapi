@@ -169,10 +169,10 @@ func GetLyricsTask(ids string) ([]byte, error) {
 	return body, nil
 }
 
-func SunoChat(c models.OpenaiCompletionsData) (interface{}, error) {
+func SunoChat(c map[string]interface{}) (interface{}, error) {
 	lastUserContent := getLastUserContent(c)
 	d := map[string]interface{}{
-		"mv":                     c.Model,
+		"mv":                     c["model"].(string),
 		"gpt_description_prompt": lastUserContent,
 		"prompt":                 "",
 		"make_instrumental":      false,
@@ -244,7 +244,7 @@ func SunoChat(c models.OpenaiCompletionsData) (interface{}, error) {
 					},
 					"created": time.Now().Unix(),
 					"id":      "chatcmpl-7QyqpwdfhqwajicIEznoc6Q47XAyW",
-					"model":   c.Model,
+					"model":   c["model"].(string),
 					"object":  "chat.completion",
 					"usage": map[string]int{
 						"completion_tokens": 17,
