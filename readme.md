@@ -15,6 +15,31 @@ App:
 ./sunoweb2api
 ```
 #### 3. 使用方式
+
+下列 api 都可以增加一个Header参数
+```shell
+Authorization : Bearer Client
+```
+其中Client为登录 suno.ai 后的 cookie中的__client=xxxxx 的值
+
+如果不填写 默认使用config.yaml中的配置中的 Client
+
+示例：
+```shell
+curl --location --request POST 'localhost:3560/v1/chat/completions' \
+--header 'Authorization: Bearer client' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "model": "chirp-v3-0",
+    "messages": [
+        {
+            "role": "user",
+            "content": "制作歌曲《万能的数字》"
+        }
+    ]
+}'
+```
+
 创建音乐任务
 ```shell
 curl --location --request POST 'localhost:3560/v2/generate' \

@@ -3,13 +3,11 @@ package main
 import (
 	"fksunoapi/cfg"
 	"fksunoapi/router"
-	"fksunoapi/serve"
 	"github.com/gofiber/fiber/v2"
 )
 
 func init() {
 	cfg.ConfigInit()
-	serve.Session = serve.GetSession()
 }
 
 func main() {

@@ -1,5 +1,9 @@
 package serve
 
+import (
+	"strings"
+)
+
 type Claims struct {
 	Exp int64 `json:"exp"`
 }
@@ -31,4 +35,16 @@ func getLastUserContent(data map[string]interface{}) string {
 	}
 
 	return lastUserContent
+}
+
+func ParseToken(authorizationHeader string) string {
+	if authorizationHeader == "" {
+		return ""
+	}
+	parts := strings.Split(authorizationHeader, " ")
+	if len(parts) == 2 && parts[0] == "Bearer" {
+		return parts[1]
+	}
+
+	return ""
 }

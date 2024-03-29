@@ -3,7 +3,6 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
-	"fksunoapi/cfg"
 	"fksunoapi/models"
 	"fmt"
 	"io"
@@ -45,13 +44,13 @@ func NewErrorResponseWithError(errorCode int, err error) *ErrorResponse {
 	}
 }
 
-func GetSession() string {
+func GetSession(c string) string {
 	_url := "https://clerk.suno.ai/v1/client?_clerk_js_version=4.70.5"
 	method := "GET"
 	client := &http.Client{}
 	req, err := http.NewRequest(method, _url, nil)
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
+	req.Header.Add("Cookie", "__client="+c)
 	res, err := client.Do(req)
 	if err != nil {
 		log.Printf("GetSession failed, error: %v", err)
@@ -72,9 +71,9 @@ func GetSession() string {
 	return data.Response.Sessions[0].Id
 }
 
-func GetJwtToken() (string, *ErrorResponse) {
-	if time.Now().After(time.Unix(SessionExp, 0)) {
-		Session = GetSession()
+func GetJwtToken(c string) (string, *ErrorResponse) {
+	if time.Now().After(time.Unix(SessionExp/1000, 0)) {
+		Session = GetSession(c)
 	}
 	_url := fmt.Sprintf("https://clerk.suno.ai/v1/client/sessions/%s/tokens?_clerk_js_version=4.70.5", Session)
 	method := "POST"
@@ -87,7 +86,7 @@ func GetJwtToken() (string, *ErrorResponse) {
 		return "", NewErrorResponse(ErrCodeRequestFailed, "create request failed")
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
+	req.Header.Add("Cookie", "__client="+c)
 
 	res, err := client.Do(req)
 	if err != nil {
@@ -115,8 +114,8 @@ func GetJwtToken() (string, *ErrorResponse) {
 	return data.Jwt, nil
 }
 
-func sendRequest(url, method string, data []byte) ([]byte, *ErrorResponse) {
-	jwt, errResp := GetJwtToken()
+func sendRequest(url, method, c string, data []byte) ([]byte, *ErrorResponse) {
+	jwt, errResp := GetJwtToken(c)
 	if errResp != nil {
 		errMsg := fmt.Sprintf("error getting JWT: %s", errResp.ErrorMsg)
 		log.Printf("sendRequest failed, %s", errMsg)
@@ -155,54 +154,54 @@ func sendRequest(url, method string, data []byte) ([]byte, *ErrorResponse) {
 	return body, nil
 }
 
-func V2Generate(d map[string]interface{}) ([]byte, *ErrorResponse) {
+func V2Generate(d map[string]interface{}, c string) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/v2/"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
 		log.Printf("V2Generate failed, error marshalling request data: %v", err)
 		return nil, NewErrorResponseWithError(ErrCodeJsonFailed, err)
 	}
-	body, errResp := sendRequest(_url, "POST", jsonData)
+	body, errResp := sendRequest(_url, "POST", c, jsonData)
 	if errResp != nil {
 		return body, errResp
 	}
 	return body, nil
 }
 
-func V2GetFeedTask(ids string) ([]byte, *ErrorResponse) {
+func V2GetFeedTask(ids, c string) ([]byte, *ErrorResponse) {
 	ids = url.QueryEscape(ids)
 	_url := "https://studio-api.suno.ai/api/feed/?ids=" + ids
-	body, errResp := sendRequest(_url, "GET", nil)
+	body, errResp := sendRequest(_url, "GET", c, nil)
 	if errResp != nil {
 		return body, errResp
 	}
 	return body, nil
 }
 
-func GenerateLyrics(d map[string]interface{}) ([]byte, *ErrorResponse) {
+func GenerateLyrics(d map[string]interface{}, c string) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/lyrics/"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
 		log.Printf("GenerateLyrics failed, error marshalling request data: %v", err)
 		return nil, NewErrorResponseWithError(ErrCodeJsonFailed, err)
 	}
-	body, errResp := sendRequest(_url, "POST", jsonData)
+	body, errResp := sendRequest(_url, "POST", c, jsonData)
 	if errResp != nil {
 		return body, errResp
 	}
 	return body, nil
 }
 
-func GetLyricsTask(ids string) ([]byte, *ErrorResponse) {
+func GetLyricsTask(ids, c string) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/lyrics/" + ids
-	body, errResp := sendRequest(_url, "GET", nil)
+	body, errResp := sendRequest(_url, "GET", c, nil)
 	if errResp != nil {
 		return body, errResp
 	}
 	return body, nil
 }
 
-func SunoChat(c map[string]interface{}) (interface{}, *ErrorResponse) {
+func SunoChat(c map[string]interface{}, ck string) (interface{}, *ErrorResponse) {
 	lastUserContent := getLastUserContent(c)
 	d := map[string]interface{}{
 		"mv":                     c["model"].(string),
@@ -210,7 +209,7 @@ func SunoChat(c map[string]interface{}) (interface{}, *ErrorResponse) {
 		"prompt":                 "",
 		"make_instrumental":      false,
 	}
-	body, errResp := V2Generate(d)
+	body, errResp := V2Generate(d, ck)
 	if errResp != nil {
 		return nil, errResp
 	}
@@ -235,7 +234,7 @@ func SunoChat(c map[string]interface{}) (interface{}, *ErrorResponse) {
 		case <-timeout:
 			return nil, NewErrorResponse(ErrCodeTimeout, "get feed task timeout")
 		case <-tick:
-			body, errResp = V2GetFeedTask(ids)
+			body, errResp = V2GetFeedTask(ids, ck)
 			if errResp != nil {
 				return nil, errResp
 			}
