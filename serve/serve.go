@@ -116,7 +116,7 @@ func GetJwtToken() (string, *ErrorResponse) {
 }
 
 func sendRequest(url, method string, data []byte) ([]byte, *ErrorResponse) {
-	jwt, errResp := IsJWTExpired()
+	jwt, errResp := GetJwtToken()
 	if errResp != nil {
 		errMsg := fmt.Sprintf("error getting JWT: %s", errResp.ErrorMsg)
 		log.Printf("sendRequest failed, %s", errMsg)
