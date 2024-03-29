@@ -3,7 +3,6 @@ package serve
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -42,30 +41,36 @@ func getLastUserContent(data map[string]interface{}) string {
 	return lastUserContent
 }
 
-func IsJWTExpired() (Jwt string, err error) {
+func IsJWTExpired() (string, *ErrorResponse) {
 	if Jwt == "" {
+		var err *ErrorResponse
 		Jwt, err = GetJwtToken()
-		return
+		if err != nil {
+			return "", err
+		}
 	}
 	parts := strings.Split(Jwt, ".")
 	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid JWT format. Expected format: header.payload.signature")
+		return "", NewErrorResponse(ErrCodeResponseInvalid, "invalid JWT format. Expected format: header.payload.signature")
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		log.Print(err)
-		return "", err
+		log.Printf("IsJWTExpired failed, error decoding JWT payload: %v", err)
+		return "", NewErrorResponseWithError(ErrCodeResponseInvalid, err)
 	}
 	var claims Claims
 	err = json.Unmarshal(payload, &claims)
 	if err != nil {
-		log.Print(err)
-		return "", err
+		log.Printf("IsJWTExpired failed, error unmarshalling JWT claims: %v", err)
+		return "", NewErrorResponseWithError(ErrCodeJsonFailed, err)
 	}
 	expTime := time.Unix(claims.Exp, 0)
 	if time.Now().After(expTime) {
+		var err *ErrorResponse
 		Jwt, err = GetJwtToken()
-		return
+		if err != nil {
+			return "", err
+		}
 	}
 	return Jwt, nil
 }

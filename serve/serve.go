@@ -3,7 +3,6 @@ package serve
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fksunoapi/cfg"
 	"fksunoapi/models"
 	"fmt"
@@ -15,10 +14,36 @@ import (
 	"time"
 )
 
+const (
+	ErrCodeRequestFailed   = 1001
+	ErrCodeResponseInvalid = 1002
+	ErrCodeJsonFailed      = 1003
+	ErrCodeTimeout         = 1004
+)
+
 var (
 	SessionExp int64
 	Session    string
 )
+
+type ErrorResponse struct {
+	ErrorCode int    `json:"error_code"`
+	ErrorMsg  string `json:"error_msg"`
+}
+
+func NewErrorResponse(errorCode int, errorMsg string) *ErrorResponse {
+	return &ErrorResponse{
+		ErrorCode: errorCode,
+		ErrorMsg:  errorMsg,
+	}
+}
+
+func NewErrorResponseWithError(errorCode int, err error) *ErrorResponse {
+	return &ErrorResponse{
+		ErrorCode: errorCode,
+		ErrorMsg:  err.Error(),
+	}
+}
 
 func GetSession() string {
 	_url := "https://clerk.suno.ai/v1/client?_clerk_js_version=4.70.5"
@@ -29,25 +54,25 @@ func GetSession() string {
 	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
 	res, err := client.Do(req)
 	if err != nil {
-		log.Print(err)
+		log.Printf("GetSession failed, error: %v", err)
 		return ""
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		log.Print("Error")
+		log.Printf("GetSession failed, invalid status code: %d", res.StatusCode)
 		return ""
 	}
 	body, _ := io.ReadAll(res.Body)
 	var data models.GetSessionData
 	if err = json.Unmarshal(body, &data); err != nil {
-		log.Print(err)
+		log.Printf("GetSession failed, json unmarshal error: %v", err)
 		return ""
 	}
 	SessionExp = data.Response.Sessions[0].ExpireAt
 	return data.Response.Sessions[0].Id
 }
 
-func GetJwtToken() (string, error) {
+func GetJwtToken() (string, *ErrorResponse) {
 	if time.Now().After(time.Unix(SessionExp, 0)) {
 		Session = GetSession()
 	}
@@ -58,54 +83,57 @@ func GetJwtToken() (string, error) {
 	req, err := http.NewRequest(method, _url, nil)
 
 	if err != nil {
-		log.Print(err)
-		return "", err
+		log.Printf("GetJwtToken failed, error: %v", err)
+		return "", NewErrorResponse(ErrCodeRequestFailed, "create request failed")
 	}
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
 	req.Header.Add("Cookie", "__client="+cfg.Config.App.Client)
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Print(err)
-		return "", err
+		log.Printf("GetJwtToken failed, error: %v", err)
+		return "", NewErrorResponse(ErrCodeRequestFailed, "send request failed")
 	}
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
 	if res.StatusCode != 200 {
-		//log.Print(string(body))
-		return "", fmt.Errorf(string(body))
+		log.Printf("GetJwtToken failed, invalid status code: %d, response: %s", res.StatusCode, string(body))
+		return "", NewErrorResponse(ErrCodeResponseInvalid, "invalid response")
 	}
+
 	var data models.GetTokenData
 	if err = json.Unmarshal(body, &data); err != nil {
-		log.Print(err)
-		return "", err
+		log.Printf("GetJwtToken failed, json unmarshal error: %v", err)
+		return "", NewErrorResponse(ErrCodeJsonFailed, "parse response failed")
 	}
-	//有效时间 1 分钟
+
 	if len(data.Jwt) == 0 {
-		log.Print("GetJwtToken: ", data.Jwt)
-		return "", err
+		log.Print("GetJwtToken failed, empty jwt token")
+		return "", NewErrorResponse(ErrCodeResponseInvalid, "get empty jwt token")
 	}
 	return data.Jwt, nil
 }
 
-func sendRequest(url, method string, data []byte) ([]byte, error) {
-	jwt, err := IsJWTExpired()
-	if err != nil {
-		log.Println("Error getting JWT: ", err)
-		return nil, err
+func sendRequest(url, method string, data []byte) ([]byte, *ErrorResponse) {
+	jwt, errResp := IsJWTExpired()
+	if errResp != nil {
+		errMsg := fmt.Sprintf("error getting JWT: %s", errResp.ErrorMsg)
+		log.Printf("sendRequest failed, %s", errMsg)
+		return nil, NewErrorResponse(errResp.ErrorCode, errMsg)
 	}
 
 	client := &http.Client{}
 	var req *http.Request
+	var err error
 	if data != nil {
 		req, err = http.NewRequest(method, url, bytes.NewReader(data))
 	} else {
 		req, err = http.NewRequest(method, url, nil)
 	}
 	if err != nil {
-		log.Print(err)
-		return nil, err
+		log.Printf("sendRequest failed, error creating request: %v", err)
+		return nil, NewErrorResponseWithError(ErrCodeRequestFailed, err)
 	}
 
 	req.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
@@ -113,63 +141,68 @@ func sendRequest(url, method string, data []byte) ([]byte, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		log.Print(err)
-		return nil, err
+		log.Printf("sendRequest failed, error sending request: %v", err)
+		return nil, NewErrorResponseWithError(ErrCodeRequestFailed, err)
 	}
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode != 200 {
+		log.Printf("sendRequest failed, unexpected status code: %d, response body: %s", res.StatusCode, string(body))
+		return body, NewErrorResponse(ErrCodeResponseInvalid, fmt.Sprintf("unexpected status code: %d, response body: %s", res.StatusCode, string(body)))
+	}
+
 	return body, nil
 }
 
-func V2Generate(d map[string]interface{}) ([]byte, error) {
+func V2Generate(d map[string]interface{}) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/v2/"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
-		log.Fatalf("Error marshalling request data: %v", err)
-		return nil, err
+		log.Printf("V2Generate failed, error marshalling request data: %v", err)
+		return nil, NewErrorResponseWithError(ErrCodeJsonFailed, err)
 	}
-	body, err := sendRequest(_url, "POST", jsonData)
-	if err != nil {
-		return nil, err
+	body, errResp := sendRequest(_url, "POST", jsonData)
+	if errResp != nil {
+		return body, errResp
 	}
 	return body, nil
 }
 
-func V2GetFeedTask(ids string) ([]byte, error) {
+func V2GetFeedTask(ids string) ([]byte, *ErrorResponse) {
 	ids = url.QueryEscape(ids)
 	_url := "https://studio-api.suno.ai/api/feed/?ids=" + ids
-	body, err := sendRequest(_url, "GET", nil)
-	if err != nil {
-		return nil, err
+	body, errResp := sendRequest(_url, "GET", nil)
+	if errResp != nil {
+		return body, errResp
 	}
 	return body, nil
 }
 
-func GenerateLyrics(d map[string]interface{}) ([]byte, error) {
+func GenerateLyrics(d map[string]interface{}) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/lyrics/"
 	jsonData, err := json.Marshal(d)
 	if err != nil {
-		log.Fatalf("Error marshalling request data: %v", err)
-		return nil, err
+		log.Printf("GenerateLyrics failed, error marshalling request data: %v", err)
+		return nil, NewErrorResponseWithError(ErrCodeJsonFailed, err)
 	}
-	body, err := sendRequest(_url, "POST", jsonData)
-	if err != nil {
-		return nil, err
+	body, errResp := sendRequest(_url, "POST", jsonData)
+	if errResp != nil {
+		return body, errResp
 	}
 	return body, nil
 }
 
-func GetLyricsTask(ids string) ([]byte, error) {
+func GetLyricsTask(ids string) ([]byte, *ErrorResponse) {
 	_url := "https://studio-api.suno.ai/api/generate/lyrics/" + ids
-	body, err := sendRequest(_url, "GET", nil)
-	if err != nil {
-		return nil, err
+	body, errResp := sendRequest(_url, "GET", nil)
+	if errResp != nil {
+		return body, errResp
 	}
 	return body, nil
 }
 
-func SunoChat(c map[string]interface{}) (interface{}, error) {
+func SunoChat(c map[string]interface{}) (interface{}, *ErrorResponse) {
 	lastUserContent := getLastUserContent(c)
 	d := map[string]interface{}{
 		"mv":                     c["model"].(string),
@@ -177,11 +210,15 @@ func SunoChat(c map[string]interface{}) (interface{}, error) {
 		"prompt":                 "",
 		"make_instrumental":      false,
 	}
-	body, err := V2Generate(d)
+	body, errResp := V2Generate(d)
+	if errResp != nil {
+		return nil, errResp
+	}
+
 	var v2GenerateData models.GenerateData
-	if err = json.Unmarshal(body, &v2GenerateData); err != nil {
-		log.Print(err)
-		return nil, err
+	if err := json.Unmarshal(body, &v2GenerateData); err != nil {
+		log.Printf("SunoChat failed, error unmarshalling generate data: %v, response body: %s", err, string(body))
+		return nil, NewErrorResponse(ErrCodeResponseInvalid, fmt.Sprintf("parse generate data failed, response body: %s", string(body)))
 	}
 
 	clipIds := make([]string, len(v2GenerateData.Clips))
@@ -196,17 +233,17 @@ func SunoChat(c map[string]interface{}) (interface{}, error) {
 	for {
 		select {
 		case <-timeout:
-			return nil, errors.New("timeout exceeded")
+			return nil, NewErrorResponse(ErrCodeTimeout, "get feed task timeout")
 		case <-tick:
-			body, err = V2GetFeedTask(ids)
-			if err != nil {
-				return nil, err
+			body, errResp = V2GetFeedTask(ids)
+			if errResp != nil {
+				return nil, errResp
 			}
 
 			var v2GetFeedData []map[string]interface{}
-			if err = json.Unmarshal(body, &v2GetFeedData); err != nil {
-				log.Print(err)
-				return nil, err
+			if err := json.Unmarshal(body, &v2GetFeedData); err != nil {
+				log.Printf("SunoChat failed, error unmarshalling feed data: %v, response body: %s", err, string(body))
+				return nil, NewErrorResponse(ErrCodeResponseInvalid, fmt.Sprintf("parse feed data failed, response body: %s", string(body)))
 			}
 
 			allComplete := true
